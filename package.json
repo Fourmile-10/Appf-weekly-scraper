@@ -1,0 +1,12 @@
+{
+  "name": "appf-weekly-scraper",
+  "version": "1.0.0",
+  "description": "Weekly scraper tracking SecondNature property management partners",
+  "type": "module",
+  "scripts": {
+    "start": "node scraper.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
