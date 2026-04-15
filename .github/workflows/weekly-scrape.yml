@@ -18,7 +18,13 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Run scraper
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium --with-deps
+
+      - name: Run scraper with integrated portal detection
         run: node scraper.js
 
       - name: Commit updated CSV
@@ -27,7 +33,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add partners.csv
           if git diff --staged --quiet; then
-            echo "No new partners found — CSV unchanged."
+            echo "No changes — CSV unchanged."
           else
             git commit -m "Weekly scrape $(date +%Y-%m-%d): update partners.csv"
             git push

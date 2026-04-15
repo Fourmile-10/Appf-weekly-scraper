@@ -4,9 +4,13 @@
   "description": "Weekly scraper tracking SecondNature property management partners",
   "type": "module",
   "scripts": {
-    "start": "node scraper.js"
+    "start": "node scraper.js",
+    "detect-portals": "node portal-detector.js"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
   }
 }
