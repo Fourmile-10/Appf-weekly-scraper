@@ -61,6 +61,49 @@ function stripHtml(str) { return str.replace(/<[^>]+>/g, "").trim(); }
 
 function urlToSlug(url) { return url.replace(/\/$/, "").split(PM_PATH)[1] ?? ""; }
 
+// ── Browser-context fetch (bypasses Cloudflare challenges) ────────────────
+
+async function ensureSession(page) {
+  if (!page.url().includes("secondnature.com")) {
+    await page.goto("https://www.secondnature.com/", {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+  }
+}
+
+async function fetchViaBrowser(page, url) {
+  await ensureSession(page);
+  const result = await page.evaluate(async (u) => {
+    try {
+      const r = await fetch(u, { credentials: "include" });
+      return {
+        ok: r.ok,
+        status: r.status,
+        contentType: r.headers.get("content-type") || "",
+        body: await r.text(),
+      };
+    } catch (e) {
+      return { ok: false, status: 0, contentType: "", body: "", error: e.message };
+    }
+  }, url);
+  if (result.error) throw new Error(`network error: ${result.error}`);
+  if (!result.ok) throw new Error(`HTTP ${result.status}`);
+  return result;
+}
+
+async function fetchJsonViaBrowser(page, url) {
+  const r = await fetchViaBrowser(page, url);
+  if (!r.contentType.toLowerCase().includes("json")) {
+    const preview = r.body.slice(0, 160).replace(/\s+/g, " ");
+    throw new Error(
+      `non-JSON response (content-type: ${r.contentType || "<none>"}). ` +
+      `Likely Cloudflare challenge. Preview: ${preview}`
+    );
+  }
+  return JSON.parse(r.body);
+}
+
 // ── CSV helpers ────────────────────────────────────────────────────────────
 
 function splitCsvLine(line) {
@@ -108,7 +151,7 @@ function loadCsv(csvPath) {
 
 // ── SecondNature scrape ────────────────────────────────────────────────────
 
-async function collectFromSearch(term) {
+async function collectFromSearch(page, term) {
   const found = new Map();
   let offset = 0;
   const limit = 100;
@@ -116,9 +159,7 @@ async function collectFromSearch(term) {
 
   while (true) {
     const params = new URLSearchParams({ term, limit, type: "SITE_PAGE", offset });
-    const res = await fetch(`${SEARCH_URL}?${params}`);
-    if (!res.ok) throw new Error(`Search failed for "${term}": ${res.status}`);
-    const data = await res.json();
+    const data = await fetchJsonViaBrowser(page, `${SEARCH_URL}?${params}`);
     const results = data.results ?? [];
     const total = data.total ?? 0;
 
@@ -134,17 +175,23 @@ async function collectFromSearch(term) {
   return found;
 }
 
-async function collectFromSitemap() {
+async function collectFromSitemap(page) {
   const found = new Map();
   const pmBase = `https://www.secondnature.com${PM_PATH}`.replace(/\/$/, "");
-  const res = await fetch(SITEMAP_URL);
-  if (!res.ok) throw new Error(`Sitemap fetch failed: ${res.status}`);
-  const xml = await res.text();
-  for (const match of xml.matchAll(/<loc>(.*?)<\/loc>/g)) {
+  const r = await fetchViaBrowser(page, SITEMAP_URL);
+  for (const match of r.body.matchAll(/<loc>(.*?)<\/loc>/g)) {
     const url = match[1].replace(/\/$/, "");
     if (url.includes(PM_PATH) && url !== pmBase) found.set(url, "");
   }
   return found;
+}
+
+async function safeCollect(page, term, all, failures) {
+  try {
+    mergeInto(all, await collectFromSearch(page, term));
+  } catch (err) {
+    failures.push({ term, error: err.message.slice(0, 160) });
+  }
 }
 
 function mergeInto(dest, src) {
@@ -159,39 +206,61 @@ function* twoLetterCombos() {
       yield String.fromCharCode(i) + String.fromCharCode(j);
 }
 
-async function runScrape() {
+async function runScrape(browser) {
   const all = new Map();
+  const failures = [];
+  const page = await browser.newPage();
+  page.setDefaultTimeout(30_000);
 
-  process.stdout.write("Blank search... ");
-  mergeInto(all, await collectFromSearch(""));
-  console.log(`${all.size} found`);
+  try {
+    process.stdout.write("Blank search... ");
+    await safeCollect(page, "", all, failures);
+    console.log(`${all.size} found`);
 
-  console.log("Single letters (a-z)...");
-  for (const letter of "abcdefghijklmnopqrstuvwxyz") {
-    mergeInto(all, await collectFromSearch(letter));
-    await sleep(RATE_LIMIT_MS);
+    console.log("Single letters (a-z)...");
+    for (const letter of "abcdefghijklmnopqrstuvwxyz") {
+      await safeCollect(page, letter, all, failures);
+      await sleep(RATE_LIMIT_MS);
+    }
+    console.log(`  ${all.size} unique partners so far`);
+
+    console.log("Two-letter combinations (aa-zz) — this takes a few minutes...");
+    let comboCount = 0;
+    for (const combo of twoLetterCombos()) {
+      await safeCollect(page, combo, all, failures);
+      await sleep(RATE_LIMIT_MS);
+      if (++comboCount % 100 === 0) console.log(`  ${comboCount}/676 done, ${all.size} unique so far`);
+    }
+    console.log(`  ${all.size} unique partners so far`);
+
+    console.log("Numbers (0-9)...");
+    for (const digit of "0123456789") {
+      await safeCollect(page, digit, all, failures);
+      await sleep(RATE_LIMIT_MS);
+    }
+    console.log(`  ${all.size} unique partners so far`);
+
+    process.stdout.write("Sitemap... ");
+    try {
+      mergeInto(all, await collectFromSitemap(page));
+      console.log(`${all.size} total after sitemap merge`);
+    } catch (err) {
+      console.log(`failed (${err.message.slice(0, 120)}) — continuing without sitemap`);
+      failures.push({ term: "<sitemap>", error: err.message.slice(0, 160) });
+    }
+  } finally {
+    await page.close();
   }
-  console.log(`  ${all.size} unique partners so far`);
 
-  console.log("Two-letter combinations (aa-zz) — this takes a few minutes...");
-  let comboCount = 0;
-  for (const combo of twoLetterCombos()) {
-    mergeInto(all, await collectFromSearch(combo));
-    await sleep(RATE_LIMIT_MS);
-    if (++comboCount % 100 === 0) console.log(`  ${comboCount}/676 done, ${all.size} unique so far`);
+  if (failures.length > 0) {
+    console.warn(`\n⚠️  ${failures.length} search term(s) failed:`);
+    for (const f of failures.slice(0, 10)) console.warn(`   "${f.term}": ${f.error}`);
+    if (failures.length > 10) console.warn(`   …and ${failures.length - 10} more`);
+    // Hard fail if we got nothing back at all — likely full Cloudflare block
+    if (all.size === 0) {
+      throw new Error(`Scrape collected 0 partners across ${failures.length} failed terms — aborting.`);
+    }
   }
-  console.log(`  ${all.size} unique partners so far`);
-
-  console.log("Numbers (0-9)...");
-  for (const digit of "0123456789") {
-    mergeInto(all, await collectFromSearch(digit));
-    await sleep(RATE_LIMIT_MS);
-  }
-  console.log(`  ${all.size} unique partners so far`);
-
-  process.stdout.write("Sitemap... ");
-  mergeInto(all, await collectFromSitemap());
-  console.log(`${all.size} total after sitemap merge`);
 
   return all;
 }
@@ -273,7 +342,7 @@ async function processRetryRow(browser, row) {
 /**
  * Run portal detection on new partners and retry candidates, then write CSV.
  */
-async function runPortalDetection(allPartners, csvPath, testMode = false) {
+async function runPortalDetection(browser, allPartners, csvPath, testMode = false) {
   const { header, rows } = loadCsv(csvPath);
   const existingSlugs = new Set(rows.map(r => r.url_slug));
 
@@ -289,22 +358,16 @@ async function runPortalDetection(allPartners, csvPath, testMode = false) {
   console.log(`Retry rows (no portal): ${retryRows.length}`);
 
   if (testMode) {
-    // In test mode: skip the scrape-derived new partners, process up to 5 retry rows
     const testRows = retryRows.slice(0, 5);
     console.log(`\n[TEST MODE] Processing ${testRows.length} retry rows — results will be saved.\n`);
     if (testRows.length === 0) { console.log("No retry rows found — test passed (nothing to do)."); return { newCount: 0, retryCount: 0, rows }; }
 
-    const browser = await launchBrowser();
-    try {
-      for (const row of testRows) {
-        console.log(`  Testing: ${row.partner_name} (${row.partner_website || row.full_url})`);
-        const updated = await processRetryRow(browser, row);
-        console.log(`    → portal_type: ${updated.portal_type}  portal_url: ${updated.portal_url || "(none)"}`);
-        const idx = rows.findIndex(r => r.url_slug === updated.url_slug);
-        if (idx !== -1) rows[idx] = updated;
-      }
-    } finally {
-      await browser.close();
+    for (const row of testRows) {
+      console.log(`  Testing: ${row.partner_name} (${row.partner_website || row.full_url})`);
+      const updated = await processRetryRow(browser, row);
+      console.log(`    → portal_type: ${updated.portal_type}  portal_url: ${updated.portal_url || "(none)"}`);
+      const idx = rows.findIndex(r => r.url_slug === updated.url_slug);
+      if (idx !== -1) rows[idx] = updated;
     }
     fs.writeFileSync(csvPath, serializeCsv(header, rows), "utf8");
     return { newCount: 0, retryCount: testRows.length, rows };
@@ -312,50 +375,44 @@ async function runPortalDetection(allPartners, csvPath, testMode = false) {
 
   if (newPartnerEntries.length === 0 && retryRows.length === 0) {
     console.log("No portal detection needed.");
-    // Still write CSV in case header columns were added
     fs.writeFileSync(csvPath, serializeCsv(header, rows), "utf8");
     return { newCount: 0, retryCount: 0, rows };
   }
 
-  const browser = await launchBrowser();
   let newDone = 0;
   let retryDone = 0;
 
-  try {
-    // ── Process new partners ────────────────────────────────────────────────
-    if (newPartnerEntries.length > 0) {
-      console.log(`\nDetecting portals for ${newPartnerEntries.length} new partners...`);
-      for (let i = 0; i < newPartnerEntries.length; i += CONCURRENCY) {
-        const batch = newPartnerEntries.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(
-          batch.map(([url, title]) => processNewPartner(browser, url, title))
-        );
-        rows.push(...results);
-        fs.writeFileSync(csvPath, serializeCsv(header, rows), "utf8");
-        newDone += results.length;
-        process.stdout.write(`\r  ${newDone}/${newPartnerEntries.length} new partners processed`);
-      }
-      console.log();
+  // ── Process new partners ────────────────────────────────────────────────
+  if (newPartnerEntries.length > 0) {
+    console.log(`\nDetecting portals for ${newPartnerEntries.length} new partners...`);
+    for (let i = 0; i < newPartnerEntries.length; i += CONCURRENCY) {
+      const batch = newPartnerEntries.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(([url, title]) => processNewPartner(browser, url, title))
+      );
+      rows.push(...results);
+      fs.writeFileSync(csvPath, serializeCsv(header, rows), "utf8");
+      newDone += results.length;
+      process.stdout.write(`\r  ${newDone}/${newPartnerEntries.length} new partners processed`);
     }
+    console.log();
+  }
 
-    // ── Retry Unknown/None/Error rows ───────────────────────────────────────
-    if (retryRows.length > 0) {
-      console.log(`\nRetrying portal detection for ${retryRows.length} unresolved rows...`);
-      for (let i = 0; i < retryRows.length; i += CONCURRENCY) {
-        const batch = retryRows.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(batch.map(r => processRetryRow(browser, r)));
-        for (const updated of results) {
-          const idx = rows.findIndex(r => r.url_slug === updated.url_slug);
-          if (idx !== -1) rows[idx] = updated;
-        }
-        fs.writeFileSync(csvPath, serializeCsv(header, rows), "utf8");
-        retryDone += results.length;
-        process.stdout.write(`\r  ${retryDone}/${retryRows.length} retries processed`);
+  // ── Retry Unknown/None/Error rows ───────────────────────────────────────
+  if (retryRows.length > 0) {
+    console.log(`\nRetrying portal detection for ${retryRows.length} unresolved rows...`);
+    for (let i = 0; i < retryRows.length; i += CONCURRENCY) {
+      const batch = retryRows.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(r => processRetryRow(browser, r)));
+      for (const updated of results) {
+        const idx = rows.findIndex(r => r.url_slug === updated.url_slug);
+        if (idx !== -1) rows[idx] = updated;
       }
-      console.log();
+      fs.writeFileSync(csvPath, serializeCsv(header, rows), "utf8");
+      retryDone += results.length;
+      process.stdout.write(`\r  ${retryDone}/${retryRows.length} retries processed`);
     }
-  } finally {
-    await browser.close();
+    console.log();
   }
 
   return { newCount: newPartnerEntries.length, retryCount: retryRows.length, rows };
@@ -366,14 +423,20 @@ async function runPortalDetection(allPartners, csvPath, testMode = false) {
 const testMode = process.argv.includes("--test");
 
 let allPartners = new Map();
+const browser = await launchBrowser();
+let newCount, retryCount, rows;
 
-if (testMode) {
-  console.log("=== TEST MODE — skipping SecondNature crawl ===\n");
-} else {
-  allPartners = await runScrape();
+try {
+  if (testMode) {
+    console.log("=== TEST MODE — skipping SecondNature crawl ===\n");
+  } else {
+    allPartners = await runScrape(browser);
+  }
+
+  ({ newCount, retryCount, rows } = await runPortalDetection(browser, allPartners, OUTPUT_CSV, testMode));
+} finally {
+  await browser.close();
 }
-
-const { newCount, retryCount, rows } = await runPortalDetection(allPartners, OUTPUT_CSV, testMode);
 
 // ── Summary ────────────────────────────────────────────────────────────────
 const tenantCounts = {};
