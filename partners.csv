@@ -75,7 +75,7 @@ Blue Sky Property Management Services LLC,blue-sky-orlando,https://www.secondnat
 PMI Bmore Metro,bmoremetro,https://www.secondnature.com/property-management/bmoremetro,2026-03-13,http://pmibmoremetro.com/,true,Rentvine,,,,,
 BMP Property Management,bmp,https://www.secondnature.com/property-management/bmp,2026-03-13,http://bmppropertymgmt.com/,true,Buildium,https://bmpprops.managebuilding.com/Resident/apps/portal,,,sign in (link),
 Bob Gunson Real Estate,bob-gunson,https://www.secondnature.com/property-management/bob-gunson,2026-03-13,http://bobgunson.com/,true,AppFolio,https://bobgunsonre.appfolio.com/connect/,,,login (link),
-The Boutique Real Estate Group,boutique-reg,https://www.secondnature.com/property-management/boutique-reg,2026-03-13,http://theboutiquerealestategroup.com/,false,Confirmed None,,,,exhaustive check — no portal found,
+The Boutique Real Estate Group,boutique-reg,https://www.secondnature.com/property-management/boutique-reg,2026-03-13,http://theboutiquerealestategroup.com/,true,Rentvine,https://theboutiquegroup.rentvine.com/portals/resident/,Rentvine,https://theboutiquegroup.rentvine.com/portals/resident/,tenant login (link),2026-06-01
 Best Property Management of TN and GA,bpm-chatt,https://www.secondnature.com/property-management/bpm-chatt,2026-03-13,http://www.bpmofchatt.com/,true,AppFolio,https://bestpmchattanooga.appfolio.com/oportal/users/log_in,,,login for owners (link),
 Branch Property Management,branch,https://www.secondnature.com/property-management/branch,2026-03-13,http://www.branchpropertymanagement.com/,true,Buildium,http://www.branchpropertymanagement.com/,,,page source scan,
 West USA Realty - Brandon Edwards,brandon-edwards,https://www.secondnature.com/property-management/brandon-edwards,2026-03-13,http://westusa.com/,false,Confirmed None,,,,exhaustive check — no portal found,
@@ -702,7 +702,7 @@ Veno Properties LLC,veno,https://www.secondnature.com/property-management/veno,2
 Vesta PM,vesta,https://www.secondnature.com/property-management/vesta,2026-03-13,,false,Confirmed None,,,,no website found,
 VIP Management,vip-management,https://www.secondnature.com/property-management/vip-management,2026-03-13,http://vippropertyinc.com/,true,AppFolio,http://vippropertyinc.com/,AppFolio,https://www.vippropertyinc.com/owner-statement,page source scan,
 "Virginia Premier Investments, LLC",virginia-premier,https://www.secondnature.com/property-management/virginia-premier,2026-03-13,http://www.virginiapremierinvestments.com/,true,AppFolio,https://www.virginiapremierinvestments.com/tenant/tenant-portal,,,tenant portal (link) via page-source,
-Wanda G Roberts Realty,wanda-roberts,https://www.secondnature.com/property-management/wanda-roberts,2026-03-13,http://wandagroberts.com/,false,Confirmed None,,,,exhaustive check — no portal found,
+Wanda G Roberts Realty,wanda-roberts,https://www.secondnature.com/property-management/wanda-roberts,2026-03-13,http://wandagroberts.com/,false,Error,,,,site unreachable,
 Watson Realty Corp.,watson-realty,https://www.secondnature.com/property-management/watson-realty,2026-03-13,http://www.watsonrealtycorp.com/,false,Confirmed None,,,,exhaustive check — no portal found,
 Watts Family Properties,watts-family,https://www.secondnature.com/property-management/watts-family,2026-03-13,http://wattsfamilyproperties.com/,true,AppFolio,https://www.wattsfamilyproperties.com/#TENANTS,,,tenant portal (link) via page-source,
 WCR,wcr,https://www.secondnature.com/property-management/wcr,2026-03-13,,false,Confirmed None,,,,no website found,
