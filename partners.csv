@@ -69,7 +69,7 @@ Blackstream Property Management,blackstream,https://www.secondnature.com/propert
 Blaze Property Management LLC,blaze,https://www.secondnature.com/property-management/blaze,2026-03-13,http://blazeproperty.com/,true,AppFolio,,,,,
 Bloom Real Estate,bloom-re,https://www.secondnature.com/property-management/bloom-re,2026-03-13,http://www.bloomhomesok.com/,true,AppFolio,http://www.bloomhomesok.com/,,,page source scan,
 Blue Sail Property Management,blue-sail,https://www.secondnature.com/property-management/blue-sail,2026-03-13,http://www.bluesailpm.com/,false,Confirmed None,,,,exhaustive check — no portal found,
-BlueSky Property Management,blue-sky,https://www.secondnature.com/property-management/blue-sky,2026-03-13,http://www.blueskypm.com/,false,Confirmed None,,,,exhaustive check — no portal found,
+BlueSky Property Management,blue-sky,https://www.secondnature.com/property-management/blue-sky,2026-03-13,http://www.blueskypm.com/,true,AppFolio,https://www.blueskypm.com/charlottesville/tenants/,,,direct path /tenants (content),2026-08-17
 Blue Sky Homes,blue-sky-homes,https://www.secondnature.com/property-management/blue-sky-homes,2026-03-13,http://www.blueskyhomes.com/,true,AppFolio,,,,,
 Blue Sky Property Management Services LLC,blue-sky-orlando,https://www.secondnature.com/property-management/blue-sky-orlando,2026-03-13,http://www.blueskyorlando.com/,true,AppFolio,https://www.blueskyorlando.com/#,,,online portals (link) via page-source,
 PMI Bmore Metro,bmoremetro,https://www.secondnature.com/property-management/bmoremetro,2026-03-13,http://pmibmoremetro.com/,true,Rentvine,,,,,
@@ -672,7 +672,7 @@ Texas Property Collective,texas-property-collective,https://www.secondnature.com
 "THE Brokerage, A Real Estate Firm®",the-brokerage,https://www.secondnature.com/property-management/the-brokerage,2026-03-13,http://www.thebrokerage.vegas/,false,Confirmed None,,,,exhaustive check — no portal found,
 The Bryants Company,the-bryants-company,https://www.secondnature.com/property-management/the-bryants-company,2026-03-13,http://thebryantsco.com/,false,Confirmed None,,,,exhaustive check — no portal found,
 "Weichert, Realtors - The Coffey Group",the-coffey-group,https://www.secondnature.com/property-management/the-coffey-group,2026-03-13,http://www.coffeygroup.net/,true,Buildium,https://thecoffeygroup.managebuilding.com/Resident/portal/login,Buildium,https://thecoffeygroup.managebuilding.com/Manager/public/authentication/login?ReturnUrl=%2Fmanager%2F,tenant portal (link),
-The Perfect Apt,the-perfect-apt,https://www.secondnature.com/property-management/the-perfect-apt,2026-03-13,http://theperfectapt.com/,false,Confirmed None,,,,exhaustive check — no portal found,
+The Perfect Apt,the-perfect-apt,https://www.secondnature.com/property-management/the-perfect-apt,2026-03-13,http://theperfectapt.com/,false,Error,,,,site unreachable,
 The Realty Factor INC,the-realty-factor,https://www.secondnature.com/property-management/the-realty-factor,2026-03-13,http://therealtyfactor.com/,false,Confirmed None,,,,exhaustive check — no portal found,
 The REIF,the-reif,https://www.secondnature.com/property-management/the-reif,2026-03-13,http://www.flintpropertymanagementinc.com/,false,Confirmed None,,,,exhaustive check — no portal found,
 The Space Company,the-space-company,https://www.secondnature.com/property-management/the-space-company,2026-03-13,http://thespacecompany.com/,true,Rentvine,,,,,
