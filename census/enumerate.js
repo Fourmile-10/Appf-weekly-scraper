@@ -37,6 +37,11 @@ const argVal = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1]
 const CC_INDEXES = parseInt(argVal("--cc") || "30", 10);
 const NO_WAYBACK = args.includes("--no-wayback");
 const SEED_ONLY = args.includes("--seed-only");
+// Overall enumeration time budget (minutes). When exceeded, remaining sources
+// are skipped so the poll step still runs inside the job's time limit.
+const BUDGET_MIN = parseInt(process.env.ENUM_BUDGET_MIN || "120", 10);
+const startedAt = Date.now();
+const overBudget = () => (Date.now() - startedAt) / 60_000 > BUDGET_MIN;
 
 const found = new Map(); // subdomain -> Set(sources)
 const add = (sub, source) => {
@@ -54,10 +59,11 @@ async function commonCrawl() {
   let total = 0;
 
   for (const idx of indexes) {
+    if (overBudget()) { log(`  time budget of ${BUDGET_MIN} min reached, skipping remaining indexes`); break; }
     const base = `${idx["cdx-api"]}?url=*.appfolio.com&output=json&fl=url`;
     let pages = 1;
     try {
-      const r = await fetchRetry(`${base}&showNumPages=true`, { tries: 8, backoff: 5000, timeout: 60_000 });
+      const r = await fetchRetry(`${base}&showNumPages=true`, { tries: 5, backoff: 4000, timeout: 60_000 });
       const j = await r.json();
       pages = j.pages ?? 1;
     } catch (err) {
@@ -68,7 +74,7 @@ async function commonCrawl() {
     let before = found.size;
     for (let p = 0; p < pages; p++) {
       try {
-        const r = await fetchRetry(`${base}&page=${p}`, { tries: 8, backoff: 5000, timeout: 120_000 });
+        const r = await fetchRetry(`${base}&page=${p}`, { tries: 5, backoff: 4000, timeout: 90_000 });
         if (r.status === 404) break; // no results for this index
         const text = await r.text();
         for (const line of text.split("\n")) {
@@ -82,6 +88,7 @@ async function commonCrawl() {
       await sleep(1500); // be polite to the CC index servers
     }
     log(`  ${idx.id}: ${pages} page(s), +${found.size - before} new subdomains (running total ${found.size})`);
+    mergeAndSave(); // incremental, so a killed job still keeps what it found
   }
   log(`[Common Crawl] done, ${total} index pages read`);
 }
@@ -89,6 +96,7 @@ async function commonCrawl() {
 // ── 2. Wayback Machine ─────────────────────────────────────────────────────
 
 async function wayback() {
+  if (overBudget()) { log(`\n[Wayback] skipped, time budget reached`); return; }
   log(`\n[Wayback] querying CDX`);
   // Domain match, collapse to one row per host so the result set stays small.
   // Negated filter (leading !) drops www.* rows; collapse keeps one row per URL key.
@@ -146,39 +154,40 @@ function seeds() {
 
 // ── Merge into customers.csv ───────────────────────────────────────────────
 
-async function main() {
-  resetRunLog(`Census run ${today()}`);
-  if (!SEED_ONLY) {
-    await commonCrawl();
-    if (!NO_WAYBACK) await wayback();
-  }
-  seeds();
-
+function mergeAndSave() {
   const { header, rows } = loadCsv(CUSTOMERS_CSV, CUSTOMERS_COLUMNS);
   const existing = new Map(rows.map(r => [r.subdomain, r]));
   let added = 0;
   const d = today();
-
-  for (const [sub, sources] of [...found.entries()].sort()) {
-    const srcStr = [...sources].sort().join(";");
+  for (const [sub, sources] of found.entries()) {
     if (existing.has(sub)) {
       const row = existing.get(sub);
       const merged = new Set((row.sources || "").split(";").filter(Boolean));
       for (const s of sources) merged.add(s);
       row.sources = [...merged].sort().join(";");
     } else {
-      rows.push({
-        subdomain: sub, first_seen: d, sources: srcStr, status: "new",
+      const row = {
+        subdomain: sub, first_seen: d, sources: [...sources].sort().join(";"), status: "new",
         last_alive: "", last_checked: "", consecutive_dead: "0", last_listing_count: "",
-      });
-      added++;
+      };
+      rows.push(row); existing.set(sub, row); added++;
     }
   }
-
   rows.sort((a, b) => a.subdomain.localeCompare(b.subdomain));
   fs.writeFileSync(CUSTOMERS_CSV, serializeCsv(header, rows), "utf8");
+  return { added, total: rows.length };
+}
 
-  const summary = `Enumeration ${d}: ${found.size} subdomains seen this run, ${added} new, ${rows.length} total in customers.csv\n`;
+async function main() {
+  resetRunLog(`Census run ${today()}`);
+  const before = loadCsv(CUSTOMERS_CSV, CUSTOMERS_COLUMNS).rows.length;
+  if (!SEED_ONLY) {
+    await commonCrawl();
+    if (!NO_WAYBACK) await wayback();
+  }
+  seeds();
+  const { total } = mergeAndSave();
+  const summary = `Enumeration ${today()}: ${found.size} subdomains seen this run, ${total - before} new, ${total} total in customers.csv (${Math.round((Date.now() - startedAt) / 60_000)} min)\n`;
   log("\n" + summary);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, "## " + summary);
 }

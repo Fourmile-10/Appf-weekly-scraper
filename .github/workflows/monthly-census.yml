@@ -10,6 +10,10 @@ on:
         description: "Common Crawl indexes to query (most recent N)"
         default: "30"
         required: false
+      enum_budget_min:
+        description: "Minutes to spend on enumeration before moving on to the poll"
+        default: "120"
+        required: false
       skip_enumerate:
         description: "Skip enumeration, poll only"
         type: boolean
@@ -38,9 +42,13 @@ jobs:
 
       - name: Enumerate subdomains (Common Crawl + Wayback + seeds)
         if: ${{ !inputs.skip_enumerate }}
+        continue-on-error: true
+        env:
+          ENUM_BUDGET_MIN: "${{ inputs.enum_budget_min || '120' }}"
         run: node census/enumerate.js --cc "${{ inputs.cc_indexes || '30' }}"
 
       - name: Poll every subdomain
+        if: always()
         run: node census/poll.js
 
       - name: Commit census CSVs
