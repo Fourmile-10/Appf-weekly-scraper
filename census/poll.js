@@ -33,7 +33,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import {
   CUSTOMERS_COLUMNS, MONTHLY_COLUMNS, loadCsv, serializeCsv, today, thisMonth,
-  pool, UA,
+  pool, UA, log, resetRunLog,
 } from "./lib.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -106,6 +106,7 @@ async function pollOne(row) {
 }
 
 async function main() {
+  if (!fs.existsSync(path.join(__dirname, "run_log.md"))) resetRunLog(`Census run ${today()}`);
   const customers = loadCsv(CUSTOMERS_CSV, CUSTOMERS_COLUMNS);
   const monthly   = loadCsv(MONTHLY_CSV, MONTHLY_COLUMNS);
   if (!customers.rows.length) { console.error("customers.csv is empty; run enumerate.js first."); process.exit(1); }
@@ -118,7 +119,7 @@ async function main() {
   if (SKIP_DEAD < Infinity) targets = targets.filter(r => parseInt(r.consecutive_dead || "0", 10) < SKIP_DEAD);
   if (LIMIT < Infinity) targets = targets.slice(0, LIMIT);
 
-  console.log(`Polling ${targets.length} of ${customers.rows.length} subdomains for ${month} (concurrency ${CONCURRENCY})`);
+  log(`Polling ${targets.length} of ${customers.rows.length} subdomains for ${month} (concurrency ${CONCURRENCY})`);
 
   // Index this month's existing rows so re-runs replace rather than duplicate
   const monthIdx = new Map();
@@ -176,7 +177,7 @@ async function main() {
   lines.push("|---|---|");
   for (const [k, v] of Object.entries(tally).sort((a, b) => b[1] - a[1])) lines.push(`| ${k} | ${v} |`);
   const summary = lines.join("\n") + "\n";
-  console.log("\n\n" + summary);
+  log("\n\n" + summary);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
 }
 

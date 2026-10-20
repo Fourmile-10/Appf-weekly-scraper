@@ -25,7 +25,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import {
   CUSTOMERS_COLUMNS, extractSubdomain, loadCsv, serializeCsv, parseCsv,
-  today, sleep, fetchRetry,
+  today, sleep, fetchRetry, log, resetRunLog,
 } from "./lib.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,7 +34,7 @@ const SEED_DIR = path.join(__dirname, "seed");
 
 const args = process.argv.slice(2);
 const argVal = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
-const CC_INDEXES = parseInt(argVal("--cc") || "12", 10);
+const CC_INDEXES = parseInt(argVal("--cc") || "30", 10);
 const NO_WAYBACK = args.includes("--no-wayback");
 const SEED_ONLY = args.includes("--seed-only");
 
@@ -48,7 +48,7 @@ const add = (sub, source) => {
 // ── 1. Common Crawl ────────────────────────────────────────────────────────
 
 async function commonCrawl() {
-  console.log(`\n[Common Crawl] fetching index list`);
+  log(`\n[Common Crawl] fetching index list`);
   const res = await fetchRetry("https://index.commoncrawl.org/collinfo.json");
   const indexes = (await res.json()).slice(0, CC_INDEXES);
   let total = 0;
@@ -61,7 +61,7 @@ async function commonCrawl() {
       const j = await r.json();
       pages = j.pages ?? 1;
     } catch (err) {
-      console.log(`  ${idx.id}: could not read page count (${err.message}), skipping`);
+      log(`  ${idx.id}: could not read page count (${err.message}), skipping`);
       continue;
     }
 
@@ -77,31 +77,31 @@ async function commonCrawl() {
         }
         total++;
       } catch (err) {
-        console.log(`  ${idx.id} page ${p}: ${err.message}`);
+        log(`  ${idx.id} page ${p}: ${err.message}`);
       }
       await sleep(400); // be polite to the CC index servers
     }
-    console.log(`  ${idx.id}: ${pages} page(s), +${found.size - before} new subdomains (running total ${found.size})`);
+    log(`  ${idx.id}: ${pages} page(s), +${found.size - before} new subdomains (running total ${found.size})`);
   }
-  console.log(`[Common Crawl] done, ${total} index pages read`);
+  log(`[Common Crawl] done, ${total} index pages read`);
 }
 
 // ── 2. Wayback Machine ─────────────────────────────────────────────────────
 
 async function wayback() {
-  console.log(`\n[Wayback] querying CDX`);
+  log(`\n[Wayback] querying CDX`);
   // Domain match, collapse to one row per host so the result set stays small.
+  // Negated filter (leading !) drops www.* rows; collapse keeps one row per URL key.
   const base = "https://web.archive.org/cdx/search/cdx?url=appfolio.com&matchType=domain" +
-               "&fl=original&collapse=urlkey&output=json" +
-               "&filter=original:^https?://(?!www\\.)[a-z0-9-]+\\.appfolio\\.com/.*";
+               "&fl=original&collapse=urlkey&output=json&filter=!original:.*www\\.appfolio\\.com.*";
   let pages = 1;
   try {
     const r = await fetchRetry(`${base}&showNumPages=true`, { tries: 3, timeout: 60_000 });
     pages = parseInt((await r.text()).trim(), 10) || 1;
   } catch (err) {
-    console.log(`  could not read page count (${err.message}); trying single query`);
+    log(`  could not read page count (${err.message}); trying single query`);
   }
-  console.log(`  ${pages} page(s)`);
+  log(`  ${pages} page(s)`);
   const before = found.size;
   for (let p = 0; p < pages; p++) {
     try {
@@ -109,11 +109,11 @@ async function wayback() {
       const rows = await r.json();
       for (const row of rows.slice(1)) add(extractSubdomain(row[0]), "wb");
     } catch (err) {
-      console.log(`  page ${p}: ${err.message}`);
+      log(`  page ${p}: ${err.message}`);
     }
     await sleep(1500);
   }
-  console.log(`[Wayback] +${found.size - before} new subdomains (running total ${found.size})`);
+  log(`[Wayback] +${found.size - before} new subdomains (running total ${found.size})`);
 }
 
 // ── 3. Seed CSVs ───────────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ function seeds() {
   if (!fs.existsSync(SEED_DIR)) return;
   const files = fs.readdirSync(SEED_DIR).filter(f => /\.(csv|txt)$/i.test(f));
   if (!files.length) return;
-  console.log(`\n[Seed] ${files.length} file(s)`);
+  log(`\n[Seed] ${files.length} file(s)`);
   for (const f of files) {
     const before = found.size;
     const content = fs.readFileSync(path.join(SEED_DIR, f), "utf8");
@@ -133,13 +133,14 @@ function seeds() {
       if (m) add(extractSubdomain(`${m[1].toLowerCase()}.appfolio.com`), `seed:${f}`);
       else if (/^[a-z0-9-]{2,63}$/i.test(String(cell).trim())) add(extractSubdomain(`${cell.trim().toLowerCase()}.appfolio.com`), `seed:${f}`);
     }
-    console.log(`  ${f}: +${found.size - before}`);
+    log(`  ${f}: +${found.size - before}`);
   }
 }
 
 // ── Merge into customers.csv ───────────────────────────────────────────────
 
 async function main() {
+  resetRunLog(`Census run ${today()}`);
   if (!SEED_ONLY) {
     await commonCrawl();
     if (!NO_WAYBACK) await wayback();
@@ -171,7 +172,7 @@ async function main() {
   fs.writeFileSync(CUSTOMERS_CSV, serializeCsv(header, rows), "utf8");
 
   const summary = `Enumeration ${d}: ${found.size} subdomains seen this run, ${added} new, ${rows.length} total in customers.csv\n`;
-  console.log("\n" + summary);
+  log("\n" + summary);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, "## " + summary);
 }
 

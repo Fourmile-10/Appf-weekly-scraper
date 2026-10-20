@@ -8,7 +8,7 @@ on:
     inputs:
       cc_indexes:
         description: "Common Crawl indexes to query (most recent N)"
-        default: "12"
+        default: "30"
         required: false
       skip_enumerate:
         description: "Skip enumeration, poll only"
@@ -38,7 +38,7 @@ jobs:
 
       - name: Enumerate subdomains (Common Crawl + Wayback + seeds)
         if: ${{ !inputs.skip_enumerate }}
-        run: node census/enumerate.js --cc "${{ inputs.cc_indexes || '12' }}"
+        run: node census/enumerate.js --cc "${{ inputs.cc_indexes || '30' }}"
 
       - name: Poll every subdomain
         run: node census/poll.js
@@ -48,7 +48,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add census/customers.csv census/listings_monthly.csv
+          git add census/customers.csv census/listings_monthly.csv census/run_log.md
           if git diff --staged --quiet; then
             echo "No changes."
           else

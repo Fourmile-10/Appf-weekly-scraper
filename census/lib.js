@@ -103,6 +103,17 @@ export function loadCsv(csvPath, defaultHeader) {
   return parsed;
 }
 
+// Run log committed with the CSVs, since Actions logs are not always reachable.
+import path from "path";
+import { fileURLToPath } from "url";
+const RUN_LOG = path.join(path.dirname(fileURLToPath(import.meta.url)), "run_log.md");
+export function resetRunLog(title) { fs.writeFileSync(RUN_LOG, `# ${title}\n\n`, "utf8"); }
+export function log(...parts) {
+  const line = parts.join(" ");
+  console.log(line);
+  try { fs.appendFileSync(RUN_LOG, line.replace(/\r/g, "") + "\n"); } catch {}
+}
+
 export const today = () => new Date().toISOString().slice(0, 10);
 export const thisMonth = () => new Date().toISOString().slice(0, 7);
 
