@@ -141,13 +141,18 @@ async function main() {
     if (monthIdx.has(row.subdomain)) monthly.rows[monthIdx.get(row.subdomain)] = rec;
     else { monthly.rows.push(rec); monthIdx.set(row.subdomain, monthly.rows.length - 1); }
 
+    // consecutive_dead counts MONTHS, so a re-run inside the same month must
+    // not increment it again.
+    const prevStatus = row.status;
+    const sameMonth = (row.last_checked || "").startsWith(month);
+    const isDead = (s) => s === "dead" || s === "http_404" || s === "http_410";
     row.last_checked = d;
     row.status = r.status;
     if (r.status.startsWith("alive")) {
       row.last_alive = d;
       row.consecutive_dead = "0";
       if (r.listing_count !== "") row.last_listing_count = r.listing_count;
-    } else if (r.status === "dead" || r.status === "http_404" || r.status === "http_410") {
+    } else if (isDead(r.status) && !(sameMonth && isDead(prevStatus))) {
       row.consecutive_dead = String(parseInt(row.consecutive_dead || "0", 10) + 1);
     }
     const bucket = r.status.startsWith("redirect:") ? "redirect_other" : r.status;

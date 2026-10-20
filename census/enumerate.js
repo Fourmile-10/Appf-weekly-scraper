@@ -57,7 +57,7 @@ async function commonCrawl() {
     const base = `${idx["cdx-api"]}?url=*.appfolio.com&output=json&fl=url`;
     let pages = 1;
     try {
-      const r = await fetchRetry(`${base}&showNumPages=true`, { tries: 5 });
+      const r = await fetchRetry(`${base}&showNumPages=true`, { tries: 8, backoff: 5000, timeout: 60_000 });
       const j = await r.json();
       pages = j.pages ?? 1;
     } catch (err) {
@@ -68,7 +68,7 @@ async function commonCrawl() {
     let before = found.size;
     for (let p = 0; p < pages; p++) {
       try {
-        const r = await fetchRetry(`${base}&page=${p}`, { tries: 5, timeout: 90_000 });
+        const r = await fetchRetry(`${base}&page=${p}`, { tries: 8, backoff: 5000, timeout: 120_000 });
         if (r.status === 404) break; // no results for this index
         const text = await r.text();
         for (const line of text.split("\n")) {
@@ -79,7 +79,7 @@ async function commonCrawl() {
       } catch (err) {
         log(`  ${idx.id} page ${p}: ${err.message}`);
       }
-      await sleep(400); // be polite to the CC index servers
+      await sleep(1500); // be polite to the CC index servers
     }
     log(`  ${idx.id}: ${pages} page(s), +${found.size - before} new subdomains (running total ${found.size})`);
   }
@@ -105,9 +105,14 @@ async function wayback() {
   const before = found.size;
   for (let p = 0; p < pages; p++) {
     try {
-      const r = await fetchRetry(`${base}&page=${p}`, { tries: 3, timeout: 120_000 });
-      const rows = await r.json();
-      for (const row of rows.slice(1)) add(extractSubdomain(row[0]), "wb");
+      const r = await fetchRetry(`${base}&page=${p}`, { tries: 3, timeout: 180_000 });
+      const text = await r.text();
+      log(`  page ${p}: HTTP ${r.status}, ${text.length} bytes, starts: ${text.slice(0, 120).replace(/\s+/g, " ")}`);
+      let rows = [];
+      try { rows = JSON.parse(text); } catch { rows = []; }
+      let n = 0;
+      for (const row of rows.slice(1)) { if (extractSubdomain(row[0])) n++; add(extractSubdomain(row[0]), "wb"); }
+      log(`  page ${p}: ${rows.length} rows, ${n} customer hosts`);
     } catch (err) {
       log(`  page ${p}: ${err.message}`);
     }
