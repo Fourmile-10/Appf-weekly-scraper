@@ -92,7 +92,9 @@ async function wayback() {
   log(`\n[Wayback] querying CDX`);
   // Domain match, collapse to one row per host so the result set stays small.
   // Negated filter (leading !) drops www.* rows; collapse keeps one row per URL key.
-  const base = "https://web.archive.org/cdx/search/cdx?url=appfolio.com&matchType=domain" +
+  // Wildcard-prefix form enumerates subdomains; the matchType=domain form only
+  // returned the apex host in practice. Exclude www.* rows with a negated filter.
+  const base = "https://web.archive.org/cdx/search/cdx?url=*.appfolio.com" +
                "&fl=original&collapse=urlkey&output=json&filter=!original:.*www\\.appfolio\\.com.*";
   let pages = 1;
   try {
@@ -105,7 +107,7 @@ async function wayback() {
   const before = found.size;
   for (let p = 0; p < pages; p++) {
     try {
-      const r = await fetchRetry(`${base}&page=${p}`, { tries: 3, timeout: 180_000 });
+      const r = await fetchRetry(pages > 1 ? `${base}&page=${p}` : base, { tries: 3, timeout: 180_000 });
       const text = await r.text();
       log(`  page ${p}: HTTP ${r.status}, ${text.length} bytes, starts: ${text.slice(0, 120).replace(/\s+/g, " ")}`);
       let rows = [];
