@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node scraper.js",
-    "detect-portals": "node portal-detector.js"
+    "detect-portals": "node portal-detector.js",
+    "quarterly-recheck": "node quarterly-recheck.js"
   },
   "engines": {
     "node": ">=18.0.0"

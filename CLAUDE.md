@@ -93,3 +93,34 @@ package.json            — sets "type": "module" for ES module syntax
 .github/workflows/
   weekly-scrape.yml     — Monday 9am UTC cron + manual trigger
 ```
+
+## Quarterly PMS Recheck (churn tracking)
+
+The weekly job only detects portals for new partners and unresolved rows, so a partner tagged AppFolio is never re-examined. `quarterly-recheck.js` re-runs portal detection on every partner with a confirmed PMS and records switches.
+
+```bash
+node quarterly-recheck.js              # full panel (~770 rows, 2-4 hours)
+node quarterly-recheck.js --limit 10   # test on 10 rows
+node quarterly-recheck.js --slug 1rm   # one partner
+```
+
+Schedule: `.github/workflows/quarterly-recheck.yml`, 10:00 UTC on the 21st of Jan / Apr / Jul / Oct. Shares a concurrency group with the weekly scrape so the two never write `partners.csv` at the same time.
+
+### Files
+
+| File | Role | Excel use |
+|------|------|-----------|
+| `partners.csv` | Current state, one row per partner. Unchanged layout plus `date_last_verified`. A confirmed switch overwrites `portal_type` / `portal_url` / `detection_method`. | Main table (existing Power Query) |
+| `portal_history.csv` | Long format: one row per partner per quarterly check, with `status` = confirmed / changed / ambiguous / unverified. | Pivot by check_date x detected_portal_type for share over time |
+| `portal_changes.csv` | One row per confirmed switch: from, to, evidence URL. This is the churn log. | Filter `from_portal_type = AppFolio` |
+
+### Rules that prevent false churn
+
+- Error / Confirmed None / `Likely: ...` results never overwrite a confirmed PMS (logged as `unverified`).
+- Add-ons (Zego, ClickPay, Paymentus, ShowMojo, Rently, Funnel, Livly, SmartRent) are not a PMS; detecting one where a PMS was confirmed is logged as `ambiguous`, not a switch.
+- A switch is re-detected once and only counts if both runs agree.
+- The partner list is never pruned: a PM that leaves SecondNature stays in the panel so SN churn is not confused with PMS churn.
+
+### Resuming
+
+Every row is stamped `date_last_verified` as it is processed and the CSVs are saved after each batch. If the GitHub job hits its time limit, the commit step still runs; re-run the workflow manually and it skips rows already verified this quarter.

@@ -1,0 +1,51 @@
+name: Quarterly PMS Recheck
+
+on:
+  schedule:
+    # 10:00 UTC on the 21st of Jan / Apr / Jul / Oct (9pm Sydney)
+    - cron: "0 10 21 1,4,7,10 *"
+  workflow_dispatch: # Allow manual runs from GitHub UI (also how to resume after a timeout)
+
+# Serialise with the weekly scrape so the two never write partners.csv at once
+concurrency:
+  group: partners-csv
+  cancel-in-progress: false
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium --with-deps
+
+      - name: Recheck every partner's PMS
+        run: node quarterly-recheck.js
+
+      # Runs even if the step above timed out, so partial progress is saved.
+      # Re-run the workflow manually to pick up where it left off.
+      - name: Commit updated CSVs
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add partners.csv portal_history.csv portal_changes.csv
+          if git diff --staged --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Quarterly PMS recheck $(date +%Y-%m-%d)"
+            git pull --rebase
+            git push
+          fi

@@ -5,6 +5,11 @@ on:
     - cron: "0 9 * * 1" # Every Monday at 9:00 AM UTC
   workflow_dispatch: # Allow manual runs from GitHub UI
 
+# Serialise with the quarterly recheck so the two never write partners.csv at once
+concurrency:
+  group: partners-csv
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
