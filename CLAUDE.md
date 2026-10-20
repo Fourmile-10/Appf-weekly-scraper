@@ -124,3 +124,36 @@ Schedule: `.github/workflows/quarterly-recheck.yml`, 10:00 UTC on the 21st of Ja
 ### Resuming
 
 Every row is stamped `date_last_verified` as it is processed and the CSVs are saved after each batch. If the GitHub job hits its time limit, the commit step still runs; re-run the workflow manually and it skips rows already verified this quarter.
+
+## AppFolio Customer Census (`census/`)
+
+Separate from the SecondNature panel. Every AppFolio customer gets `[slug].appfolio.com` with a public, server-rendered `/listings` page. The census enumerates slugs from public indexes and polls each one monthly. No Playwright, Node built-ins only.
+
+```bash
+node census/enumerate.js          # Common Crawl (last 12 indexes) + Wayback + census/seed/*.csv
+node census/poll.js               # poll every known slug
+node census/poll.js --limit 50    # test
+```
+
+Schedule: `.github/workflows/monthly-census.yml`, 11:00 UTC on the 2nd of each month. Manual run supports `cc_indexes` and `skip_enumerate` inputs.
+
+### Files
+
+| File | Role |
+|------|------|
+| `census/customers.csv` | One row per slug (append-only): first_seen, sources, status, last_alive, last_checked, consecutive_dead, last_listing_count |
+| `census/listings_monthly.csv` | One row per slug per month: status, http_status, listing_count. Re-running in the same month replaces that month's rows. |
+| `census/seed/` | Optional seed lists (any CSV with appfolio.com hosts or bare slugs) |
+
+### Status values
+
+- `alive` — 200 on the customer host with listings markup; `listing_count` = distinct `/listings/detail/` links
+- `alive_nolistings` — 200 but no listings markup (public listings disabled)
+- `dead` — redirected to `www.appfolio.com/page-not-found-sub`: slug no longer belongs to a customer. Treat **2+ consecutive dead polls** as churn.
+- `http_<code>`, `redirect:<host>`, `error` — kept separate; only `dead`/404/410 increment `consecutive_dead`
+
+### Interpretation
+
+- Customer count and churn come from `alive` vs `consecutive_dead >= 2`. New slugs per month (first_seen) is a gross-adds proxy, bounded by how quickly public indexes pick new customers up.
+- `listing_count` is vacancies, not units. Use it cross-sectionally (size buckets from trailing averages) or same-store year over year, not as a raw unit-growth series.
+- Enumeration is append-only and depends on Common Crawl / Wayback coverage, so the panel undercounts the true base. Add seed lists to `census/seed/` to widen it.

@@ -1,0 +1,58 @@
+name: Monthly AppFolio Census
+
+on:
+  schedule:
+    # 11:00 UTC on the 2nd of every month (10pm Sydney)
+    - cron: "0 11 2 * *"
+  workflow_dispatch:
+    inputs:
+      cc_indexes:
+        description: "Common Crawl indexes to query (most recent N)"
+        default: "12"
+        required: false
+      skip_enumerate:
+        description: "Skip enumeration, poll only"
+        type: boolean
+        default: false
+        required: false
+
+concurrency:
+  group: census
+  cancel-in-progress: false
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No npm install needed: census scripts use only Node built-ins.
+
+      - name: Enumerate subdomains (Common Crawl + Wayback + seeds)
+        if: ${{ !inputs.skip_enumerate }}
+        run: node census/enumerate.js --cc "${{ inputs.cc_indexes || '12' }}"
+
+      - name: Poll every subdomain
+        run: node census/poll.js
+
+      - name: Commit census CSVs
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add census/customers.csv census/listings_monthly.csv
+          if git diff --staged --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Monthly census $(date +%Y-%m-%d)"
+            git pull --rebase
+            git push
+          fi
