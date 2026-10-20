@@ -55,7 +55,13 @@ const add = (sub, source) => {
 async function commonCrawl() {
   log(`\n[Common Crawl] fetching index list`);
   const res = await fetchRetry("https://index.commoncrawl.org/collinfo.json");
-  const indexes = (await res.json()).slice(0, CC_INDEXES);
+  const all = (await res.json()).slice(0, CC_INDEXES);
+  // Always read the newest 6 indexes first (new customers), then the rest in a
+  // random order so that, across monthly runs, older indexes all get covered
+  // even when the time budget cuts a run short.
+  const head = all.slice(0, 6);
+  const tail = all.slice(6).sort(() => Math.random() - 0.5);
+  const indexes = [...head, ...tail];
   let total = 0;
 
   for (const idx of indexes) {
