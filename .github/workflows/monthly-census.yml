@@ -26,6 +26,8 @@ concurrency:
 
 jobs:
   census:
+    # A cancelled run must not commit a half-written log over a live one
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 340
     permissions:
@@ -52,7 +54,7 @@ jobs:
         run: node census/poll.js
 
       - name: Commit census CSVs
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -61,6 +63,12 @@ jobs:
             echo "No changes."
           else
             git commit -m "Monthly census $(date +%Y-%m-%d)"
-            git pull --rebase
-            git push
+            # Another run (or the weekly scrape) may have pushed meanwhile.
+            # During a rebase "theirs" is the commit being replayed, i.e. this
+            # run's data, which should win for the census files.
+            for i in 1 2 3; do
+              git pull --rebase -X theirs && git push && break
+              git rebase --abort 2>/dev/null || true
+              sleep 15
+            done
           fi

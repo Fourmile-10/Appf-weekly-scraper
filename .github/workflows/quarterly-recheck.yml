@@ -46,6 +46,9 @@ jobs:
             echo "No changes."
           else
             git commit -m "Quarterly PMS recheck $(date +%Y-%m-%d)"
-            git pull --rebase
-            git push
+            for i in 1 2 3; do
+              git pull --rebase -X theirs && git push && break
+              git rebase --abort 2>/dev/null || true
+              sleep 15
+            done
           fi
