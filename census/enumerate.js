@@ -141,8 +141,9 @@ function seeds() {
   for (const f of files) {
     const before = found.size;
     const content = fs.readFileSync(path.join(SEED_DIR, f), "utf8");
-    const { rows } = parseCsv(content);
-    const cells = rows.length ? rows.flatMap(r => Object.values(r)) : content.split(/\r?\n/);
+    const { header, rows } = parseCsv(content);
+    // Include the header row too: a plain list of slugs has no header.
+    const cells = [...header, ...rows.flatMap(r => Object.values(r))];
     for (const cell of cells) {
       const m = String(cell).match(/([a-z0-9-]+)\.appfolio\.com/i);
       if (m) add(extractSubdomain(`${m[1].toLowerCase()}.appfolio.com`), `seed:${f}`);
