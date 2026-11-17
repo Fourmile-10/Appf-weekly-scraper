@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   recheck:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.59 cannot install on Ubuntu 26 (ubuntu-latest from Oct 2026)
     timeout-minutes: 340
     permissions:
       contents: write
